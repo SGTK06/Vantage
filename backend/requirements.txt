@@ -5,3 +5,6 @@ supabase
 python-multipart
 pydantic
 email-validator
+llama-cloud
+pydantic
+pandas
