@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { apiUploadInvoice } from '../lib/api'
+import { apiUploadInvoice } from '../lib/api.js'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()

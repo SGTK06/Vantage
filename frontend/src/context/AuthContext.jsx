@@ -7,7 +7,7 @@ import {
   setStoredToken,
   getStoredUser,
   setStoredUser,
-} from '../lib/api'
+} from '../lib/api.js'
 
 const AuthContext = createContext()
 

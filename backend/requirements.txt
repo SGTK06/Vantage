@@ -3,4 +3,5 @@ uvicorn[standard]
 python-dotenv
 supabase
 python-multipart
-pydantic
+pydantic
+email-validator
