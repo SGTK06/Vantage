@@ -1,13 +1,15 @@
 import json
 import os
+import re
 import tempfile
 import time
 from typing import List, Optional
 from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import FRONTEND_URL
-from app.auth import get_current_user
-from app.supabase_client import get_supabase_client
+from app.auth import get_current_user, security
+from app.supabase_client import get_authenticated_supabase_client, get_supabase_client
 from app.schemas import AuthCredentials, AuthResponse, UserResponse, InvoiceExtractData
 from app.invoice_handler import extract_invoice
 
@@ -41,7 +43,7 @@ def sign_up(credentials: AuthCredentials):
             "email": credentials.email,
             "password": credentials.password,
         })
-        
+
         user_data = None
         if res.user:
             user_data = UserResponse(
@@ -49,9 +51,9 @@ def sign_up(credentials: AuthCredentials):
                 email=res.user.email,
                 created_at=str(res.user.created_at) if res.user.created_at else None,
             )
-        
+
         access_token = res.session.access_token if res.session else None
-        
+
         return AuthResponse(
             access_token=access_token,
             user=user_data,
@@ -71,19 +73,19 @@ def sign_in(credentials: AuthCredentials):
             "email": credentials.email,
             "password": credentials.password,
         })
-        
+
         if not res.session or not res.user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
             )
-            
+
         user_data = UserResponse(
             id=res.user.id,
             email=res.user.email,
             created_at=str(res.user.created_at) if res.user.created_at else None,
         )
-        
+
         return AuthResponse(
             access_token=res.session.access_token,
             user=user_data,
@@ -148,6 +150,7 @@ async def confirm_and_save_invoice(
     file: UploadFile = File(...),
     invoice_data_str: str = Form(...),
     current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     """Uploads the original PDF to Supabase storage and stores verified invoice & line items in the database."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
@@ -174,9 +177,16 @@ async def confirm_and_save_invoice(
 
     user_id = current_user.id
     timestamp = int(time.time() * 1000)
-    file_path = f"{user_id}/{timestamp}_{file.filename}"
+    # Keep the object key inside the user's folder even if a client submits a
+    # filename containing path separators or control characters.
+    safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename(file.filename))
+    file_path = f"{user_id}/{timestamp}_{safe_filename}"
 
-    supabase = get_supabase_client()
+    # Authentication in get_current_user validates the JWT. This request-
+    # scoped client forwards the same JWT so Storage/PostgREST apply auth.uid()
+    # and the configured RLS policies see the user rather than anon.
+    supabase = get_authenticated_supabase_client(credentials.credentials)
+    invoice_id = None
 
     # 1. Upload original PDF to Supabase Storage
     try:
@@ -212,7 +222,7 @@ async def confirm_and_save_invoice(
         db_resp = supabase.table("invoices").insert(invoice_insert_payload).execute()
         if not db_resp.data:
             raise RuntimeError("Database did not return inserted invoice record")
-        
+
         saved_invoice = db_resp.data[0]
         invoice_id = saved_invoice["id"]
 
@@ -229,7 +239,9 @@ async def confirm_and_save_invoice(
                 }
                 for idx, item in enumerate(validated_data.line_items, start=1)
             ]
-            supabase.table("line_items").insert(line_item_rows).execute()
+            line_items_resp = supabase.table("line_items").insert(line_item_rows).execute()
+            if not line_items_resp.data or len(line_items_resp.data) != len(line_item_rows):
+                raise RuntimeError("Database did not return all inserted line items")
 
         return {
             "message": "Invoice and extracted data saved successfully",
@@ -237,15 +249,29 @@ async def confirm_and_save_invoice(
             "data": saved_invoice,
         }
     except Exception as e:
+        # Storage and database writes cannot share a transaction. Compensate
+        # for partial success so retries do not accumulate orphaned objects.
+        if invoice_id:
+            try:
+                supabase.table("invoices").delete().eq("id", invoice_id).execute()
+            except Exception:
+                pass
+        try:
+            supabase.storage.from_("invoices").remove([file_path])
+        except Exception:
+            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database record creation failed: {str(e)}",
         )
 
 @app.get("/api/invoices")
-async def list_invoices(current_user=Depends(get_current_user)):
+async def list_invoices(
+    current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
     user_id = current_user.id
-    supabase = get_supabase_client()
+    supabase = get_authenticated_supabase_client(credentials.credentials)
     try:
         db_resp = (
             supabase.table("invoices")
