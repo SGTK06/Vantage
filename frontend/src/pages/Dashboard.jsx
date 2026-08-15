@@ -15,7 +15,10 @@ export default function Dashboard() {
   const [file, setFile] = useState(null)
   const [isParsing, setIsParsing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
-  const fileInputRef = useRef(null)
+
+  // Dedicated file input refs for empty state vs modal to prevent stale/unattached DOM ref issues
+  const emptyFileInputRef = useRef(null)
+  const modalFileInputRef = useRef(null)
 
   // Verification state
   const [parsedData, setParsedData] = useState(null)
@@ -29,7 +32,7 @@ export default function Dashboard() {
     try {
       setLoadingInvoices(true)
       const data = await apiGetInvoices()
-      setInvoices(data)
+      setInvoices(Array.isArray(data) ? data : [])
     } catch (err) {
       console.error('Failed to fetch invoices:', err)
     } finally {
@@ -120,9 +123,8 @@ export default function Dashboard() {
       setParsedData(null)
       setFile(null)
       setIsUploadModalOpen(false)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
+      if (emptyFileInputRef.current) emptyFileInputRef.current.value = ''
+      if (modalFileInputRef.current) modalFileInputRef.current.value = ''
       await fetchInvoices()
     } catch (err) {
       setErrorMessage(err.message || 'Failed to save confirmed invoice.')
@@ -131,15 +133,31 @@ export default function Dashboard() {
     }
   }
 
+  const handleOpenUploadModal = () => {
+    setFile(null)
+    setParsedData(null)
+    setErrorMessage(null)
+    setStatus(null)
+    if (modalFileInputRef.current) modalFileInputRef.current.value = ''
+    setIsUploadModalOpen(true)
+  }
+
   const handleCloseUploadModal = () => {
     setIsUploadModalOpen(false)
     setFile(null)
     setParsedData(null)
     setErrorMessage(null)
     setStatus(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
-    }
+    if (modalFileInputRef.current) modalFileInputRef.current.value = ''
+  }
+
+  const handleReset = () => {
+    setFile(null)
+    setParsedData(null)
+    setStatus(null)
+    setErrorMessage(null)
+    if (emptyFileInputRef.current) emptyFileInputRef.current.value = ''
+    if (modalFileInputRef.current) modalFileInputRef.current.value = ''
   }
 
   const handleDragOver = (e) => {
@@ -212,11 +230,11 @@ export default function Dashboard() {
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
+                onClick={() => emptyFileInputRef.current?.click()}
                 style={{ marginBottom: '1.25rem' }}
               >
                 <input
-                  ref={fileInputRef}
+                  ref={emptyFileInputRef}
                   type="file"
                   accept="application/pdf"
                   style={{ display: 'none' }}
@@ -258,6 +276,7 @@ export default function Dashboard() {
               )}
 
               <button
+                type="button"
                 onClick={handleParse}
                 disabled={!file || isParsing}
                 className="wb-button-primary"
@@ -277,10 +296,8 @@ export default function Dashboard() {
                 <p className="wb-subtitle">Overview of parsed and recorded vendor invoices.</p>
               </div>
               <button
-                onClick={() => {
-                  handleReset()
-                  setIsUploadModalOpen(true)
-                }}
+                type="button"
+                onClick={handleOpenUploadModal}
                 className="wb-button-primary"
                 style={{ width: 'auto' }}
               >
@@ -377,7 +394,7 @@ export default function Dashboard() {
                       <h2 className="wb-title" style={{ fontSize: '1.25rem' }}>Upload Invoice</h2>
                       <p className="wb-subtitle">Upload your invoice PDF to extract structured data via LlamaParse OCR.</p>
                     </div>
-                    <button onClick={handleCloseUploadModal} className="wb-button-ghost">
+                    <button type="button" onClick={handleCloseUploadModal} className="wb-button-ghost">
                       Cancel
                     </button>
                   </div>
@@ -387,11 +404,11 @@ export default function Dashboard() {
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => modalFileInputRef.current?.click()}
                     style={{ marginBottom: '1.25rem' }}
                   >
                     <input
-                      ref={fileInputRef}
+                      ref={modalFileInputRef}
                       type="file"
                       accept="application/pdf"
                       style={{ display: 'none' }}
@@ -427,6 +444,7 @@ export default function Dashboard() {
                   )}
 
                   <button
+                    type="button"
                     onClick={handleParse}
                     disabled={!file || isParsing}
                     className="wb-button-primary"
@@ -443,7 +461,7 @@ export default function Dashboard() {
                       <h2 className="wb-title" style={{ fontSize: '1.25rem' }}>Verify Extracted Invoice</h2>
                       <p className="wb-subtitle">Review and verify the data extracted from <strong>{file?.name}</strong>.</p>
                     </div>
-                    <button onClick={handleReset} className="wb-button-ghost">
+                    <button type="button" onClick={handleReset} className="wb-button-ghost">
                       Discard
                     </button>
                   </div>
@@ -588,6 +606,7 @@ export default function Dashboard() {
                                 </td>
                                 <td style={{ padding: '0.375rem', textAlign: 'center' }}>
                                   <button
+                                    type="button"
                                     onClick={() => handleRemoveLineItem(idx)}
                                     style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1rem' }}
                                     title="Delete row"
@@ -665,6 +684,7 @@ export default function Dashboard() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={handleConfirmAndSave}
                     disabled={isSaving || !parsedData.total_amount || !parsedData.supplier_name || !parsedData.invoice_number}
                     className="wb-button-primary"
@@ -687,7 +707,7 @@ export default function Dashboard() {
                   <h2 className="wb-title" style={{ fontSize: '1.25rem' }}>{selectedInvoice.supplier_name}</h2>
                   <p className="wb-subtitle">Invoice #{selectedInvoice.invoice_number} • {selectedInvoice.invoice_date || 'No date'}</p>
                 </div>
-                <button onClick={() => setSelectedInvoice(null)} className="wb-button-ghost">
+                <button type="button" onClick={() => setSelectedInvoice(null)} className="wb-button-ghost">
                   Close
                 </button>
               </div>
