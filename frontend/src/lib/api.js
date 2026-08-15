@@ -71,12 +71,12 @@ export async function apiGetMe() {
   return await res.json()
 }
 
-export async function apiUploadInvoice(file) {
+export async function apiParseInvoice(file) {
   const authHeaders = getAuthHeaders()
   const formData = new FormData()
   formData.append('file', file)
 
-  const res = await fetch(`${API_URL}/api/invoices/upload`, {
+  const res = await fetch(`${API_URL}/api/invoices/parse`, {
     method: 'POST',
     headers: {
       ...authHeaders,
@@ -86,7 +86,29 @@ export async function apiUploadInvoice(file) {
 
   const data = await res.json()
   if (!res.ok) {
-    throw new Error(data.detail || 'Failed to upload invoice')
+    throw new Error(data.detail || 'Failed to parse invoice with OCR')
+  }
+
+  return data
+}
+
+export async function apiConfirmInvoice(file, invoiceData) {
+  const authHeaders = getAuthHeaders()
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('invoice_data_str', JSON.stringify(invoiceData))
+
+  const res = await fetch(`${API_URL}/api/invoices/confirm`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders,
+    },
+    body: formData,
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to save confirmed invoice')
   }
 
   return data

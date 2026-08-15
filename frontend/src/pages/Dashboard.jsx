@@ -1,15 +1,23 @@
 import { useState, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { apiUploadInvoice } from '../lib/api.js'
+import { apiParseInvoice, apiConfirmInvoice } from '../lib/api.js'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
+  
+  // Step 1: Upload state
   const [file, setFile] = useState(null)
-  const [status, setStatus] = useState(null)
-  const [errorMessage, setErrorMessage] = useState(null)
-  const [isUploading, setIsUploading] = useState(false)
+  const [isParsing, setIsParsing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef(null)
+
+  // Step 2: Verification state
+  const [parsedData, setParsedData] = useState(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  // Feedback states
+  const [status, setStatus] = useState(null)
+  const [errorMessage, setErrorMessage] = useState(null)
 
   const handleFileSelect = (selectedFile) => {
     if (!selectedFile) return
@@ -20,26 +28,92 @@ export default function Dashboard() {
     }
     setErrorMessage(null)
     setStatus(null)
+    setParsedData(null)
     setFile(selectedFile)
   }
 
-  const handleUpload = async () => {
+  const handleParse = async () => {
     if (!file) return
-    setIsUploading(true)
+    setIsParsing(true)
     setStatus(null)
     setErrorMessage(null)
 
     try {
-      await apiUploadInvoice(file)
-      setStatus('Invoice uploaded successfully.')
+      const data = await apiParseInvoice(file)
+      setParsedData(data)
+    } catch (err) {
+      setErrorMessage(err.message || 'OCR parsing failed.')
+    } finally {
+      setIsParsing(false)
+    }
+  }
+
+  const handleFieldChange = (field, value) => {
+    setParsedData((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const handleLineItemChange = (index, field, value) => {
+    setParsedData((prev) => {
+      const updatedItems = [...(prev.line_items || [])]
+      updatedItems[index] = {
+        ...updatedItems[index],
+        [field]: value,
+      }
+      return {
+        ...prev,
+        line_items: updatedItems,
+      }
+    })
+  }
+
+  const handleAddLineItem = () => {
+    setParsedData((prev) => ({
+      ...prev,
+      line_items: [
+        ...(prev.line_items || []),
+        { description: '', quantity: 1, unit_cost: 0, total_cost: 0 },
+      ],
+    }))
+  }
+
+  const handleRemoveLineItem = (index) => {
+    setParsedData((prev) => ({
+      ...prev,
+      line_items: (prev.line_items || []).filter((_, idx) => idx !== index),
+    }))
+  }
+
+  const handleConfirmAndSave = async () => {
+    if (!file || !parsedData) return
+    setIsSaving(true)
+    setStatus(null)
+    setErrorMessage(null)
+
+    try {
+      await apiConfirmInvoice(file, parsedData)
+      setStatus('Invoice and extracted data saved successfully to Supabase.')
+      setParsedData(null)
       setFile(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
     } catch (err) {
-      setErrorMessage(err.message || 'Upload failed.')
+      setErrorMessage(err.message || 'Failed to save confirmed invoice.')
     } finally {
-      setIsUploading(false)
+      setIsSaving(false)
+    }
+  }
+
+  const handleReset = () => {
+    setFile(null)
+    setParsedData(null)
+    setStatus(null)
+    setErrorMessage(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
   }
 
@@ -89,74 +163,314 @@ export default function Dashboard() {
       <main style={{
         flex: 1,
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'center',
-        padding: '2rem',
+        padding: '2.5rem 1.5rem',
       }}>
-        <div className="wb-card" style={{ width: '100%', maxWidth: '520px', padding: '2.25rem' }}>
-          <div style={{ marginBottom: '1.75rem' }}>
-            <h1 className="wb-title">Upload Invoice</h1>
-            <p className="wb-subtitle">Upload your invoice PDF to begin processing.</p>
-          </div>
+        {!parsedData ? (
+          /* Step 1: Upload and Parse Screen */
+          <div className="wb-card" style={{ width: '100%', maxWidth: '520px', padding: '2.25rem' }}>
+            <div style={{ marginBottom: '1.75rem' }}>
+              <h1 className="wb-title">Upload Invoice</h1>
+              <p className="wb-subtitle">Upload your invoice PDF to extract structured data via LlamaParse OCR.</p>
+            </div>
 
-          <div
-            className={`wb-dropzone ${isDragging ? 'active' : ''}`}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-            style={{ marginBottom: '1.25rem' }}
-          >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              style={{ display: 'none' }}
-              onChange={(e) => handleFileSelect(e.target.files[0])}
-            />
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-              {file ? (
-                <div>
-                  <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-                    {file.name}
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    {(file.size / 1024).toFixed(1)} KB • Click to change file
-                  </p>
+            <div
+              className={`wb-dropzone ${isDragging ? 'active' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{ marginBottom: '1.25rem' }}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                style={{ display: 'none' }}
+                onChange={(e) => handleFileSelect(e.target.files[0])}
+              />
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                {file ? (
+                  <div>
+                    <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                      {file.name}
+                    </p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      {(file.size / 1024).toFixed(1)} KB • Click to choose another file
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
+                      Drag and drop PDF invoice here
+                    </p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      or click to browse from device
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {errorMessage && (
+              <div className="wb-alert-error" style={{ marginBottom: '1.25rem' }}>
+                {errorMessage}
+              </div>
+            )}
+
+            {status && (
+              <div className="wb-alert-success" style={{ marginBottom: '1.25rem' }}>
+                {status}
+              </div>
+            )}
+
+            <button
+              onClick={handleParse}
+              disabled={!file || isParsing}
+              className="wb-button-primary"
+            >
+              {isParsing ? 'Running OCR Extraction...' : 'Parse Invoice'}
+            </button>
+          </div>
+        ) : (
+          /* Step 2: Interactive Verification & Edit Screen */
+          <div className="wb-card" style={{ width: '100%', maxWidth: '840px', padding: '2.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem' }}>
+              <div>
+                <h1 className="wb-title">Verify Extracted Invoice</h1>
+                <p className="wb-subtitle">Review and verify the data extracted from <strong>{file?.name}</strong>.</p>
+              </div>
+              <button onClick={handleReset} className="wb-button-ghost">
+                Discard & Upload Another
+              </button>
+            </div>
+
+            {errorMessage && (
+              <div className="wb-alert-error" style={{ marginBottom: '1.25rem' }}>
+                {errorMessage}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Supplier Name
+                </label>
+                <input
+                  className="wb-input"
+                  value={parsedData.supplier_name || ''}
+                  onChange={(e) => handleFieldChange('supplier_name', e.target.value)}
+                  placeholder="e.g. Acme Corp"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Invoice Number
+                </label>
+                <input
+                  className="wb-input"
+                  value={parsedData.invoice_number || ''}
+                  onChange={(e) => handleFieldChange('invoice_number', e.target.value)}
+                  placeholder="e.g. INV-2026-001"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Customer Name
+                </label>
+                <input
+                  className="wb-input"
+                  value={parsedData.customer_name || ''}
+                  onChange={(e) => handleFieldChange('customer_name', e.target.value)}
+                  placeholder="e.g. Customer Inc"
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Invoice Date
+                </label>
+                <input
+                  className="wb-input"
+                  type="date"
+                  value={parsedData.invoice_date || ''}
+                  onChange={(e) => handleFieldChange('invoice_date', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Due Date
+                </label>
+                <input
+                  className="wb-input"
+                  type="date"
+                  value={parsedData.due_date || ''}
+                  onChange={(e) => handleFieldChange('due_date', e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Currency
+                </label>
+                <input
+                  className="wb-input"
+                  value={parsedData.currency || 'USD'}
+                  onChange={(e) => handleFieldChange('currency', e.target.value)}
+                  placeholder="USD, EUR, MYR..."
+                />
+              </div>
+            </div>
+
+            {/* Line Items Section */}
+            <div style={{ marginBottom: '1.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>Line Items</h3>
+                <button onClick={handleAddLineItem} type="button" className="wb-button-ghost" style={{ fontSize: '0.75rem' }}>
+                  + Add Item
+                </button>
+              </div>
+
+              {parsedData.line_items && parsedData.line_items.length > 0 ? (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.8125rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '0.5rem', color: 'var(--text-secondary)' }}>Description</th>
+                        <th style={{ padding: '0.5rem', width: '90px', color: 'var(--text-secondary)' }}>Qty</th>
+                        <th style={{ padding: '0.5rem', width: '110px', color: 'var(--text-secondary)' }}>Unit Price</th>
+                        <th style={{ padding: '0.5rem', width: '110px', color: 'var(--text-secondary)' }}>Total</th>
+                        <th style={{ padding: '0.5rem', width: '40px' }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parsedData.line_items.map((item, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '0.375rem' }}>
+                            <input
+                              className="wb-input"
+                              value={item.description || ''}
+                              onChange={(e) => handleLineItemChange(idx, 'description', e.target.value)}
+                            />
+                          </td>
+                          <td style={{ padding: '0.375rem' }}>
+                            <input
+                              className="wb-input"
+                              type="number"
+                              step="any"
+                              value={item.quantity !== null && item.quantity !== undefined ? item.quantity : ''}
+                              onChange={(e) => handleLineItemChange(idx, 'quantity', parseFloat(e.target.value) || null)}
+                            />
+                          </td>
+                          <td style={{ padding: '0.375rem' }}>
+                            <input
+                              className="wb-input"
+                              type="number"
+                              step="any"
+                              value={item.unit_cost !== null && item.unit_cost !== undefined ? item.unit_cost : ''}
+                              onChange={(e) => handleLineItemChange(idx, 'unit_cost', parseFloat(e.target.value) || null)}
+                            />
+                          </td>
+                          <td style={{ padding: '0.375rem' }}>
+                            <input
+                              className="wb-input"
+                              type="number"
+                              step="any"
+                              value={item.total_cost !== null && item.total_cost !== undefined ? item.total_cost : ''}
+                              onChange={(e) => handleLineItemChange(idx, 'total_cost', parseFloat(e.target.value) || null)}
+                            />
+                          </td>
+                          <td style={{ padding: '0.375rem', textAlign: 'center' }}>
+                            <button
+                              onClick={() => handleRemoveLineItem(idx)}
+                              style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '1rem' }}
+                              title="Delete row"
+                            >
+                              &times;
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
-                <div>
-                  <p style={{ fontWeight: 500, color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-                    Drag and drop PDF invoice here
-                  </p>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    or click to browse from device
-                  </p>
-                </div>
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                  No line items extracted. Click "+ Add Item" if you wish to record individual items.
+                </p>
               )}
             </div>
+
+            {/* Totals Summary */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '1.25rem', marginBottom: '1.75rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Subtotal
+                </label>
+                <input
+                  className="wb-input"
+                  type="number"
+                  step="any"
+                  value={parsedData.subtotal !== null && parsedData.subtotal !== undefined ? parsedData.subtotal : ''}
+                  onChange={(e) => handleFieldChange('subtotal', parseFloat(e.target.value) || null)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Tax Amount
+                </label>
+                <input
+                  className="wb-input"
+                  type="number"
+                  step="any"
+                  value={parsedData.tax_amount !== null && parsedData.tax_amount !== undefined ? parsedData.tax_amount : ''}
+                  onChange={(e) => handleFieldChange('tax_amount', parseFloat(e.target.value) || null)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem' }}>
+                  Discount Amount
+                </label>
+                <input
+                  className="wb-input"
+                  type="number"
+                  step="any"
+                  value={parsedData.discount_amount !== null && parsedData.discount_amount !== undefined ? parsedData.discount_amount : ''}
+                  onChange={(e) => handleFieldChange('discount_amount', parseFloat(e.target.value) || null)}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.375rem' }}>
+                  Total Amount (Required)
+                </label>
+                <input
+                  className="wb-input"
+                  type="number"
+                  step="any"
+                  style={{ fontWeight: 600 }}
+                  value={parsedData.total_amount !== null && parsedData.total_amount !== undefined ? parsedData.total_amount : ''}
+                  onChange={(e) => handleFieldChange('total_amount', parseFloat(e.target.value) || 0)}
+                  required
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleConfirmAndSave}
+              disabled={isSaving || !parsedData.total_amount || !parsedData.supplier_name || !parsedData.invoice_number}
+              className="wb-button-primary"
+            >
+              {isSaving ? 'Saving to Database & Storage...' : 'Confirm & Save to Supabase'}
+            </button>
           </div>
-
-          {errorMessage && (
-            <div className="wb-alert-error" style={{ marginBottom: '1.25rem' }}>
-              {errorMessage}
-            </div>
-          )}
-
-          {status && (
-            <div className="wb-alert-success" style={{ marginBottom: '1.25rem' }}>
-              {status}
-            </div>
-          )}
-
-          <button
-            onClick={handleUpload}
-            disabled={!file || isUploading}
-            className="wb-button-primary"
-          >
-            {isUploading ? 'Uploading...' : 'Upload Invoice'}
-          </button>
-        </div>
+        )}
       </main>
     </div>
   )
