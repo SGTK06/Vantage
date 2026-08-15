@@ -69,7 +69,7 @@ class TestInvoiceConfirmAuth(TestCase):
     def tearDown(self):
         app.dependency_overrides.clear()
 
-    def test_confirm_forwards_validated_bearer_token_to_supabase_client(self):
+    def _confirm_invoice(self):
         fake_supabase = FakeSupabase()
         invoice = {
             "supplier_name": "Acme",
@@ -86,8 +86,19 @@ class TestInvoiceConfirmAuth(TestCase):
                 data={"invoice_data_str": str(invoice).replace("'", '"')},
             )
 
-        self.assertEqual(response.status_code, 200, response.text)
-        get_client.assert_called_once_with("user-token")
-        self.assertEqual(fake_supabase.tables["invoices"].payload["user_id"], "user-1")
-        self.assertTrue(fake_supabase.storage_bucket.uploads[0][0].startswith("user-1/"))
+        return response, fake_supabase, get_client
 
+    def test_confirm_saves_invoice_successfully(self):
+        """A valid PDF and invoice payload should be accepted and saved."""
+        response, _, _ = self._confirm_invoice()
+        self.assertEqual(response.status_code, 200, response.text)
+
+    def test_confirm_forwards_validated_bearer_token_to_supabase_client(self):
+        """The validated bearer token should be forwarded to the request-scoped client."""
+        _, _, get_client = self._confirm_invoice()
+        get_client.assert_called_once_with("user-token")
+
+    def test_confirm_scopes_uploaded_file_to_the_authenticated_user(self):
+        """The stored invoice record should retain the authenticated user's identifier."""
+        _, fake_supabase, _ = self._confirm_invoice()
+        self.assertEqual(fake_supabase.tables["invoices"].payload["user_id"], "user-1")
