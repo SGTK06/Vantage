@@ -6,16 +6,18 @@ This also lets users get key insights, recommendation, cost management tips, and
 
 ### Process
 
+```bash
 PDF Invoices
-| (LlamaParse OCR)
-V
+    | (LlamaParse OCR)
+    V
 Parsed Data (Structured Data Models)
-| (RapidFuzz similarity grouping / embedding based grouping)
-V
+    | (RapidFuzz similarity grouping / embedding based grouping)
+    V
 Expense Categories
-| (Statistics and Summary Dashboard)
-V
+    | (Statistics and Summary Dashboard)
+    V
 AI Data Insights and Querying
+```
 
 ### Repo Structure
 
