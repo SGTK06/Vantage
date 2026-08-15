@@ -15,3 +15,7 @@
 ## Deployment
 
 **Render** chosen for Web Application Deployment
+
+## Third-Party Tools
+
+**LlamaParse** for running PDF-Data-Extractiona dn OCR
