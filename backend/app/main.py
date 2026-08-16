@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import tempfile
@@ -10,8 +11,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import FRONTEND_URL
 from app.auth import get_current_user, security
 from app.supabase_client import get_authenticated_supabase_client, get_supabase_client
-from app.schemas import AuthCredentials, AuthResponse, UserResponse, InvoiceExtractData
+from app.data_models import (
+    AuthCredentials,
+    AuthResponse,
+    UserResponse,
+    InvoiceExtractData,
+    ProductCategoryCreate,
+    ProductCategoryResponse,
+)
 from app.invoice_handler import extract_invoice
+from app.categorizer import categorize_line_items_pipeline, get_text_embedding
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Vantage API")
 
@@ -107,14 +118,78 @@ def get_me(current_user=Depends(get_current_user)):
         created_at=str(current_user.created_at) if current_user.created_at else None,
     )
 
-# --- Invoice OCR & Confirm Endpoints ---
+# --- Product Categories Endpoints ---
+
+@app.get("/api/categories", response_model=List[ProductCategoryResponse])
+def get_categories(
+    current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    supabase = get_authenticated_supabase_client(credentials.credentials)
+    try:
+        res = supabase.table("product_categories").select("id, user_id, name, description, created_at").eq("user_id", current_user.id).order("name").execute()
+        return res.data or []
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch product categories: {str(e)}",
+        )
+
+@app.post("/api/categories", response_model=ProductCategoryResponse)
+def create_category(
+    payload: ProductCategoryCreate,
+    current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category name cannot be empty")
+
+    desc = payload.description or ""
+    # Generate embedding vector via Google gemini-embedding-001
+    try:
+        embedding_vec = get_text_embedding(f"{name}: {desc}")
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate embedding with gemini-embedding-001: {str(e)}",
+        )
+
+    supabase = get_authenticated_supabase_client(credentials.credentials)
+    try:
+        insert_res = supabase.table("product_categories").insert({
+            "user_id": current_user.id,
+            "name": name,
+            "description": desc,
+            "embedding": embedding_vec,
+        }).execute()
+
+        if not insert_res.data:
+            raise RuntimeError("Failed to create product category in Supabase")
+
+        created = insert_res.data[0]
+        return ProductCategoryResponse(
+            id=created["id"],
+            user_id=created.get("user_id"),
+            name=created["name"],
+            description=created.get("description"),
+            created_at=str(created.get("created_at")),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error saving category: {str(e)}",
+        )
+
+# --- Invoice OCR, Categorization & Confirm Endpoints ---
 
 @app.post("/api/invoices/parse", response_model=InvoiceExtractData)
 async def parse_invoice(
     file: UploadFile = File(...),
     current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
-    """Parses an uploaded PDF file with LlamaParse OCR and returns extracted structured data."""
+    """Parses PDF with LlamaParse OCR, then categorizes items via Supabase gemini-embedding-001 vector search + Gemma LLM."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -135,7 +210,6 @@ async def parse_invoice(
 
     try:
         extracted = extract_invoice(tmp_path)
-        return extracted
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -145,6 +219,29 @@ async def parse_invoice(
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+    # Run AI categorization on line items
+    raw_extracted_dict = extracted.model_dump()
+    line_items_raw = raw_extracted_dict.get("line_items", [])
+
+    if line_items_raw:
+        supabase = get_authenticated_supabase_client(credentials.credentials)
+        try:
+            categorized_line_items = categorize_line_items_pipeline(
+                line_items=line_items_raw,
+                user_id=current_user.id,
+                supabase_client=supabase,
+            )
+            raw_extracted_dict["line_items"] = categorized_line_items
+        except Exception as e:
+            logger.error(f"Categorization error in pipeline: {e}")
+            # Ensure line items at least receive default categorization if an unexpected exception occurs
+            for item in line_items_raw:
+                if not item.get("category_name"):
+                    item["category_name"] = "General"
+            raw_extracted_dict["line_items"] = line_items_raw
+
+    return InvoiceExtractData.model_validate(raw_extracted_dict)
+
 @app.post("/api/invoices/confirm")
 async def confirm_and_save_invoice(
     file: UploadFile = File(...),
@@ -152,7 +249,7 @@ async def confirm_and_save_invoice(
     current_user=Depends(get_current_user),
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
-    """Uploads the original PDF to Supabase storage and stores verified invoice & line items in the database."""
+    """Uploads PDF to Supabase storage and stores vendor, invoice & line items in the database."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -177,16 +274,10 @@ async def confirm_and_save_invoice(
 
     user_id = current_user.id
     timestamp = int(time.time() * 1000)
-    # Keep the object key inside the user's folder even if a client submits a
-    # filename containing path separators or control characters.
     safe_filename = re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename(file.filename))
     file_path = f"{user_id}/{timestamp}_{safe_filename}"
 
-    # Authentication in get_current_user validates the JWT. This request-
-    # scoped client forwards the same JWT so Storage/PostgREST apply auth.uid()
-    # and the configured RLS policies see the user rather than anon.
     supabase = get_authenticated_supabase_client(credentials.credentials)
-    invoice_id = None
 
     # 1. Upload original PDF to Supabase Storage
     try:
@@ -201,14 +292,31 @@ async def confirm_and_save_invoice(
             detail=f"Storage upload failed: {str(e)}",
         )
 
-    # 2. Insert Invoice Metadata into Database
+    # 2. Find or create Vendor record
+    vendor_id = None
+    if validated_data.supplier_name:
+        try:
+            vendor_select = supabase.table("vendors").select("id").eq("user_id", user_id).eq("name", validated_data.supplier_name.strip()).execute()
+            if vendor_select.data and len(vendor_select.data) > 0:
+                vendor_id = vendor_select.data[0]["id"]
+            else:
+                vendor_insert = supabase.table("vendors").insert({
+                    "user_id": user_id,
+                    "name": validated_data.supplier_name.strip(),
+                    "address": validated_data.supplier_address,
+                }).execute()
+                if vendor_insert.data and len(vendor_insert.data) > 0:
+                    vendor_id = vendor_insert.data[0]["id"]
+        except Exception as e:
+            logger.warning(f"Vendor resolution warning: {e}")
+
+    # 3. Insert Invoice Metadata into Database
     try:
         invoice_insert_payload = {
             "user_id": user_id,
+            "vendor_id": vendor_id,
             "file_path": file_path,
             "file_name": file.filename,
-            "supplier_name": validated_data.supplier_name,
-            "supplier_address": validated_data.supplier_address,
             "customer_name": validated_data.customer_name,
             "invoice_number": validated_data.invoice_number,
             "invoice_date": validated_data.invoice_date or None,
@@ -226,40 +334,50 @@ async def confirm_and_save_invoice(
         saved_invoice = db_resp.data[0]
         invoice_id = saved_invoice["id"]
 
-        # 3. Insert Line Items into Database
+        # 4. Insert Line Items into Database with Category IDs
         if validated_data.line_items:
-            line_item_rows = [
-                {
+            line_item_rows = []
+            for idx, item in enumerate(validated_data.line_items, start=1):
+                cat_id = item.category_id
+
+                # If category_name provided but no category_id, find or create category
+                if not cat_id and item.category_name:
+                    cat_name = item.category_name.strip()
+                    try:
+                        cat_find = supabase.table("product_categories").select("id").eq("user_id", user_id).eq("name", cat_name).execute()
+                        if cat_find.data and len(cat_find.data) > 0:
+                            cat_id = cat_find.data[0]["id"]
+                        else:
+                            emb = get_text_embedding(cat_name)
+                            cat_create = supabase.table("product_categories").insert({
+                                "user_id": user_id,
+                                "name": cat_name,
+                                "embedding": emb,
+                            }).execute()
+                            if cat_create.data:
+                                cat_id = cat_create.data[0]["id"]
+                    except Exception as e:
+                        logger.warning(f"Category creation warning during confirm: {e}")
+
+                line_item_rows.append({
                     "invoice_id": invoice_id,
+                    "category_id": cat_id,
                     "line_no": idx,
                     "description": item.description,
                     "quantity": item.quantity,
                     "unit_cost": item.unit_cost,
                     "total_cost": item.total_cost,
-                }
-                for idx, item in enumerate(validated_data.line_items, start=1)
-            ]
-            line_items_resp = supabase.table("line_items").insert(line_item_rows).execute()
-            if not line_items_resp.data or len(line_items_resp.data) != len(line_item_rows):
-                raise RuntimeError("Database did not return all inserted line items")
+                })
+
+            if line_item_rows:
+                supabase.table("line_items").insert(line_item_rows).execute()
 
         return {
-            "message": "Invoice and extracted data saved successfully",
+            "message": "Invoice and extracted categorized data saved successfully",
             "invoice_id": invoice_id,
             "data": saved_invoice,
         }
     except Exception as e:
-        # Storage and database writes cannot share a transaction. Compensate
-        # for partial success so retries do not accumulate orphaned objects.
-        if invoice_id:
-            try:
-                supabase.table("invoices").delete().eq("id", invoice_id).execute()
-            except Exception:
-                pass
-        try:
-            supabase.storage.from_("invoices").remove([file_path])
-        except Exception:
-            pass
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Database record creation failed: {str(e)}",
@@ -275,7 +393,7 @@ async def list_invoices(
     try:
         db_resp = (
             supabase.table("invoices")
-            .select("*, line_items(*)")
+            .select("*, vendors(*), line_items(*, product_categories(*))")
             .eq("user_id", user_id)
             .order("uploaded_at", desc=True)
             .execute()
