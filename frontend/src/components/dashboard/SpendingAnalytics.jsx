@@ -1,3 +1,5 @@
+import { TimelineLineChart, HorizontalBarChart } from './SpendingCharts'
+
 export default function SpendingAnalytics({ analytics, loading }) {
   if (loading && !analytics) {
     return (
@@ -89,109 +91,72 @@ export default function SpendingAnalytics({ analytics, loading }) {
         </div>
       </div>
 
-      {/* Analytics Breakdown Grid */}
+      {/* Analytics Charts Grid */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
         gap: '1.5rem',
       }}>
-        {/* Panel 1: Top Vendors by Spend */}
+        {/* Chart 1: Top Vendors by Spend (Standardized 0-100% Bar Chart) */}
         <div className="wb-card" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Top Vendors by Spending
-            </h3>
+            <div>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Top Vendors by Spend
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
+                Ranked expenditure distribution across suppliers
+              </p>
+            </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Top {top_vendors.length}</span>
           </div>
 
-          {top_vendors.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {top_vendors.map((vendor, idx) => (
-                <div key={vendor.vendor_name || idx}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', marginBottom: '0.25rem' }}>
-                    <span style={{ fontWeight: 500 }}>
-                      <span style={{ color: 'var(--text-muted)', marginRight: '0.5rem' }}>#{idx + 1}</span>
-                      {vendor.vendor_name}
-                    </span>
-                    <span style={{ fontWeight: 600 }}>
-                      ${vendor.total_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '0.375rem', fontSize: '0.75rem' }}>
-                        ({vendor.spend_percentage}%)
-                      </span>
-                    </span>
-                  </div>
-                  {/* Share Progress Bar */}
-                  <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${Math.min(100, Math.max(2, vendor.spend_percentage))}%`,
-                      height: '100%',
-                      backgroundColor: 'var(--text-primary)',
-                      borderRadius: '3px',
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              No vendor statistics available yet.
-            </p>
-          )}
+          <HorizontalBarChart
+            data={top_vendors}
+            labelKey="vendor_name"
+            valueKey="total_spend"
+            percentageKey="spend_percentage"
+            maxScale={total_spend}
+            scaleLabel="% of total spend"
+          />
         </div>
 
-        {/* Panel 2: Product Category Spending Breakdown */}
+        {/* Chart 2: Category Breakdown (Standardized 0-100% Bar Chart) */}
         <div className="wb-card" style={{ padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Category Spending Breakdown
-            </h3>
+            <div>
+              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Category Spend Distribution
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
+                Product categories classified by AI
+              </p>
+            </div>
             <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{category_breakdown.length} categories</span>
           </div>
 
-          {category_breakdown.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '280px', overflowY: 'auto' }}>
-              {category_breakdown.map((cat, idx) => (
-                <div key={cat.category_name || idx}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8125rem', marginBottom: '0.25rem' }}>
-                    <span style={{ fontWeight: 500 }}>
-                      {cat.category_name}
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '0.375rem' }}>
-                        ({cat.item_count} items)
-                      </span>
-                    </span>
-                    <span style={{ fontWeight: 600 }}>
-                      ${cat.total_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: '0.375rem', fontSize: '0.75rem' }}>
-                        ({cat.spend_percentage}%)
-                      </span>
-                    </span>
-                  </div>
-                  {/* Category Progress Bar */}
-                  <div style={{ width: '100%', height: '6px', backgroundColor: 'var(--border-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{
-                      width: `${Math.min(100, Math.max(2, cat.spend_percentage))}%`,
-                      height: '100%',
-                      backgroundColor: 'var(--text-secondary)',
-                      borderRadius: '3px',
-                    }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-              No categorized line items available yet.
-            </p>
-          )}
+          <HorizontalBarChart
+            data={category_breakdown}
+            labelKey="category_name"
+            valueKey="total_spend"
+            percentageKey="spend_percentage"
+            maxScale={total_spend}
+            scaleLabel="% of total spend"
+          />
         </div>
 
-        {/* Panel 3: Monthly Spend Trend & Highlights */}
+        {/* Chart 3: Monthly Expenses Timeline (Line Graph) */}
         {monthly_trend.length > 0 && (
           <div className="wb-card" style={{ padding: '1.5rem', gridColumn: '1 / -1' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Monthly Outflow Timeline
-              </h3>
+              <div>
+                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Expenses Timeline Trend
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
+                  Chronological monthly expenditure curve
+                </p>
+              </div>
               {largest_invoice && (
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                   Largest Invoice: <strong>${largest_invoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> ({largest_invoice.vendor_name})
@@ -199,24 +164,7 @@ export default function SpendingAnalytics({ analytics, loading }) {
               )}
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '1rem' }}>
-              {monthly_trend.map((m) => (
-                <div key={m.month} style={{
-                  padding: '0.875rem 1rem',
-                  borderRadius: '6px',
-                  backgroundColor: 'var(--surface-hover)',
-                  border: '1px solid var(--border)',
-                }}>
-                  <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{m.month}</p>
-                  <p style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
-                    ${m.total_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                  <p style={{ fontSize: '0.6875rem', color: 'var(--text-muted)', marginTop: '0.125rem' }}>
-                    {m.invoice_count} {m.invoice_count === 1 ? 'invoice' : 'invoices'}
-                  </p>
-                </div>
-              ))}
-            </div>
+            <TimelineLineChart data={monthly_trend} />
           </div>
         )}
       </div>
