@@ -70,6 +70,9 @@ The application uses Supabase Auth, database tables, row-level security, vector 
 ### 3. Configure the backend
 
 Create `backend/.env` from the provided example and replace the placeholder values:
+Get the supabase credentials from your account.
+Get LLAMA_CLOUD_API_KEY from LlamaIndex https://www.llamaindex.ai/llamaparse.
+Get GEMINI_API_KEY from Google AI Studio https://aistudio.google.com/api-keys
 
 ```bash
 SUPABASE_URL=https://your-project-id.supabase.co

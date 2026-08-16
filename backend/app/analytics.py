@@ -1,5 +1,7 @@
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
+from datetime import date, timedelta
+import re
 from app.data_models import (
     SpendingAnalyticsResponse,
     VendorSpendStat,
@@ -169,3 +171,213 @@ def compute_user_spending_analytics(
         monthly_trend=monthly_trend_list,
         largest_invoice=LargestInvoiceStat(**largest_inv_obj) if largest_inv_obj else None,
     )
+
+
+def _fetch_user_invoice_records(user_id: str, supabase_client) -> list[dict]:
+    """Fetch invoice and line-item records for read-only analytics tools."""
+    response = (
+        supabase_client.table("invoices")
+        .select("*, vendors(*), line_items(*, product_categories(*))")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return response.data or []
+
+
+def _effective_invoice_date(invoice: dict) -> Optional[date]:
+    """Use invoice date first, falling back to the upload date when needed."""
+    raw_date = invoice.get("invoice_date") or (invoice.get("uploaded_at") or "")[:10]
+    try:
+        return date.fromisoformat(str(raw_date)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_item_description(description: Any) -> str:
+    normalized = re.sub(r"\s+", " ", str(description or "").strip().lower())
+    return normalized
+
+
+def _line_item_cost(line_item: dict) -> float:
+    total_cost = line_item.get("total_cost")
+    if total_cost is not None:
+        return float(total_cost or 0.0)
+    quantity = float(line_item.get("quantity") or 1.0)
+    unit_cost = float(line_item.get("unit_cost") or 0.0)
+    return quantity * unit_cost
+
+
+def compute_item_spending(
+    user_id: str,
+    supabase_client,
+    start_date: date,
+    end_date: date,
+    item_name: Optional[str] = None,
+    top_n: int = 10,
+) -> dict:
+    """Compute item-level spending for an inclusive date range."""
+    target = _normalize_item_description(item_name) if item_name else None
+    grouped: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "item_name": "",
+            "total_spend": 0.0,
+            "purchase_count": 0,
+            "invoice_ids": set(),
+            "total_quantity": 0.0,
+            "unit_costs": [],
+            "last_purchase_date": None,
+            "vendors": set(),
+            "categories": set(),
+        }
+    )
+
+    for invoice in _fetch_user_invoice_records(user_id, supabase_client):
+        invoice_date = _effective_invoice_date(invoice)
+        if not invoice_date or invoice_date < start_date or invoice_date > end_date:
+            continue
+
+        vendor_name = (invoice.get("vendors") or {}).get("name") or invoice.get("supplier_name") or "Unknown Vendor"
+        for line_item in invoice.get("line_items") or []:
+            normalized = _normalize_item_description(line_item.get("description"))
+            if not normalized or (target and normalized != target):
+                continue
+
+            stat = grouped[normalized]
+            stat["item_name"] = stat["item_name"] or str(line_item.get("description")).strip()
+            stat["total_spend"] += _line_item_cost(line_item)
+            stat["purchase_count"] += 1
+            stat["invoice_ids"].add(invoice.get("id") or invoice.get("invoice_number") or str(invoice_date))
+            stat["total_quantity"] += float(line_item.get("quantity") or 1.0)
+            if line_item.get("unit_cost") is not None:
+                stat["unit_costs"].append(float(line_item.get("unit_cost") or 0.0))
+            stat["last_purchase_date"] = max(stat["last_purchase_date"] or invoice_date, invoice_date)
+            stat["vendors"].add(vendor_name)
+            category_name = (line_item.get("product_categories") or {}).get("name")
+            if category_name:
+                stat["categories"].add(category_name)
+
+    results = []
+    for stat in grouped.values():
+        results.append({
+            "item_name": stat["item_name"],
+            "total_spend": round(stat["total_spend"], 2),
+            "purchase_count": stat["purchase_count"],
+            "invoice_count": len(stat["invoice_ids"]),
+            "total_quantity": round(stat["total_quantity"], 2),
+            "average_unit_cost": round(sum(stat["unit_costs"]) / len(stat["unit_costs"]), 2) if stat["unit_costs"] else 0.0,
+            "last_purchase_date": stat["last_purchase_date"].isoformat() if stat["last_purchase_date"] else None,
+            "vendors": sorted(stat["vendors"]),
+            "categories": sorted(stat["categories"]),
+        })
+
+    results.sort(key=lambda item: item["total_spend"], reverse=True)
+    return {
+        "start_date": start_date.isoformat(),
+        "end_date": end_date.isoformat(),
+        "item_name_filter": item_name,
+        "items": results[:max(1, min(top_n, 50))],
+        "matched_item_count": len(results),
+    }
+
+
+def compute_recurring_items(
+    user_id: str,
+    supabase_client,
+    minimum_months: int = 3,
+    top_n: int = 10,
+) -> dict:
+    """Find normalized line items purchased in at least N distinct calendar months."""
+    grouped: Dict[str, Dict[str, Any]] = defaultdict(
+        lambda: {
+            "item_name": "",
+            "months": set(),
+            "total_spend": 0.0,
+            "purchase_count": 0,
+            "total_quantity": 0.0,
+            "first_purchase_date": None,
+            "last_purchase_date": None,
+            "vendors": set(),
+        }
+    )
+
+    for invoice in _fetch_user_invoice_records(user_id, supabase_client):
+        invoice_date = _effective_invoice_date(invoice)
+        if not invoice_date:
+            continue
+        vendor_name = (invoice.get("vendors") or {}).get("name") or invoice.get("supplier_name") or "Unknown Vendor"
+        for line_item in invoice.get("line_items") or []:
+            normalized = _normalize_item_description(line_item.get("description"))
+            if not normalized:
+                continue
+            stat = grouped[normalized]
+            stat["item_name"] = stat["item_name"] or str(line_item.get("description")).strip()
+            stat["months"].add(invoice_date.strftime("%Y-%m"))
+            stat["total_spend"] += _line_item_cost(line_item)
+            stat["purchase_count"] += 1
+            stat["total_quantity"] += float(line_item.get("quantity") or 1.0)
+            stat["first_purchase_date"] = min(stat["first_purchase_date"] or invoice_date, invoice_date)
+            stat["last_purchase_date"] = max(stat["last_purchase_date"] or invoice_date, invoice_date)
+            stat["vendors"].add(vendor_name)
+
+    results = []
+    for stat in grouped.values():
+        if len(stat["months"]) < max(2, minimum_months):
+            continue
+        results.append({
+            "item_name": stat["item_name"],
+            "distinct_months": len(stat["months"]),
+            "purchase_months": sorted(stat["months"]),
+            "purchase_count": stat["purchase_count"],
+            "total_quantity": round(stat["total_quantity"], 2),
+            "total_spend": round(stat["total_spend"], 2),
+            "average_monthly_spend": round(stat["total_spend"] / len(stat["months"]), 2),
+            "first_purchase_date": stat["first_purchase_date"].isoformat(),
+            "last_purchase_date": stat["last_purchase_date"].isoformat(),
+            "vendors": sorted(stat["vendors"]),
+        })
+
+    results.sort(key=lambda item: (item["distinct_months"], item["total_spend"]), reverse=True)
+    return {
+        "minimum_months": minimum_months,
+        "items": results[:max(1, min(top_n, 50))],
+        "matched_item_count": len(results),
+    }
+
+
+def compute_item_spending_change(
+    user_id: str,
+    supabase_client,
+    days: int = 30,
+) -> dict:
+    """Compare item spending in the latest rolling period with the preceding period."""
+    period_days = max(1, min(days, 365))
+    end_date = date.today()
+    current_start = end_date - timedelta(days=period_days - 1)
+    previous_end = current_start - timedelta(days=1)
+    previous_start = previous_end - timedelta(days=period_days - 1)
+    current = compute_item_spending(user_id, supabase_client, current_start, end_date, top_n=50)["items"]
+    previous = compute_item_spending(user_id, supabase_client, previous_start, previous_end, top_n=50)["items"]
+    current_by_item = {_normalize_item_description(item["item_name"]): item["total_spend"] for item in current}
+    previous_by_item = {_normalize_item_description(item["item_name"]): item["total_spend"] for item in previous}
+    changes = []
+    for normalized in set(current_by_item) | set(previous_by_item):
+        current_spend = current_by_item.get(normalized, 0.0)
+        previous_spend = previous_by_item.get(normalized, 0.0)
+        change = current_spend - previous_spend
+        percentage = round((change / previous_spend) * 100, 1) if previous_spend else None
+        display_name = next((item["item_name"] for item in current + previous if _normalize_item_description(item["item_name"]) == normalized), normalized)
+        changes.append({
+            "item_name": display_name,
+            "current_spend": round(current_spend, 2),
+            "previous_spend": round(previous_spend, 2),
+            "change": round(change, 2),
+            "percentage_change": percentage,
+        })
+    changes.sort(key=lambda item: abs(item["change"]), reverse=True)
+    return {
+        "current_start_date": current_start.isoformat(),
+        "current_end_date": end_date.isoformat(),
+        "previous_start_date": previous_start.isoformat(),
+        "previous_end_date": previous_end.isoformat(),
+        "items": changes[:10],
+    }

@@ -2,9 +2,9 @@ import { useState } from 'react'
 import { apiAskAnalyticsAgent } from '../../lib/api.js'
 
 const SUGGESTIONS = [
-  'What is driving my spending?',
-  'Which vendor should I review first?',
-  'How has spending changed over time?',
+  'Which item did I spend the most on in the last 2 weeks?',
+  'Which items have I been buying every month?',
+  'What changed in my spending this month?',
 ]
 
 export default function AnalystAgent() {
