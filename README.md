@@ -4,6 +4,8 @@ Goal is to make expense tracking easier for SMEs and ensure that the spending da
 This app takes the users from staring at an overwhelming number of rows, to getting the information needed immediately by extracting information, visualizing, and processing to show key stats and summary.
 This also lets users get key insights, recommendation, cost management tips, and spending summary in natural language by letting an AI agent access and understand the computed statistics.
 
+**Deployed Application Link:** https://vantage-frontend-t028.onrender.com/
+
 ### Process
 
 ```bash

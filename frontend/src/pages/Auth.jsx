@@ -38,22 +38,31 @@ export default function Auth() {
   }
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1.5rem',
-    }}>
-      <div className="wb-card" style={{ width: '100%', maxWidth: '380px', padding: '2rem' }}>
-        <div style={{ marginBottom: '1.5rem' }}>
-          <h1 className="wb-title">Vantage</h1>
-          <p className="wb-subtitle">
-            {isSignup ? 'Create your account to start analyzing invoices.' : 'Log in to your workspace.'}
+    <div className="auth-page">
+      <div className="auth-layout">
+        <section className="auth-info" aria-labelledby="auth-info-heading">
+          <p className="auth-brand">Vantage</p>
+          <h1 id="auth-info-heading" className="auth-heading">See the story behind your spending.</h1>
+          <p className="auth-description">
+            Vantage helps small and growing businesses turn PDF invoices into clear,
+            actionable spending insights.
           </p>
-        </div>
+          <ul className="auth-features" aria-label="What Vantage helps you do">
+            <li>Upload invoices and keep them in one place</li>
+            <li>See spending organized by category and vendor</li>
+            <li>Ask questions about your business spending in plain language</li>
+          </ul>
+        </section>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div className="wb-card auth-card" role="dialog" aria-labelledby="auth-dialog-heading">
+          <div className="auth-dialog-header">
+            <h2 id="auth-dialog-heading" className="wb-title">{isSignup ? 'Create your account' : 'Welcome back'}</h2>
+            <p className="wb-subtitle">
+              {isSignup ? 'Get started with Vantage.' : 'Log in to continue to your workspace.'}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.375rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Email
@@ -113,6 +122,7 @@ export default function Auth() {
           </button>
         </div>
       </div>
+    </div>
     </div>
   )
 }
