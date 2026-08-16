@@ -1,4 +1,4 @@
-export default function Header({ user, categoriesCount, onOpenCategoryModal, onSignOut }) {
+export default function Header({ user, onSignOut }) {
   return (
     <header style={{
       backgroundColor: 'var(--surface)',
@@ -14,13 +14,6 @@ export default function Header({ user, categoriesCount, onOpenCategoryModal, onS
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Dashboard</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-        <button
-          type="button"
-          onClick={onOpenCategoryModal}
-          className="wb-button-ghost"
-        >
-          Product Categories ({categoriesCount})
-        </button>
         <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>{user?.email}</span>
         <button type="button" onClick={onSignOut} className="wb-button-ghost">
           Sign out

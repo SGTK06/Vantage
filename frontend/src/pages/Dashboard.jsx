@@ -211,19 +211,11 @@ export default function Dashboard() {
       {/* 1. Header Component */}
       <Header
         user={user}
-        categoriesCount={categories.length}
-        onOpenCategoryModal={() => setIsCategoryModalOpen(true)}
         onSignOut={logout}
       />
 
       {/* 2. Main Content Area */}
-      <main style={{
-        flex: 1,
-        padding: '2rem',
-        maxWidth: '1200px',
-        width: '100%',
-        margin: '0 auto',
-      }}>
+      <main className="dashboard-main">
         {loadingInvoices ? (
           <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
             <p>Loading invoices and spending metrics...</p>
@@ -244,34 +236,71 @@ export default function Dashboard() {
           />
         ) : (
           /* Formal Dashboard View */
-          <div>
-            {/* Action Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div className="dashboard-content">
+            {/* Analytics section */}
+            <div className="dashboard-toolbar">
               <div>
-                <h1 className="wb-title">Spending Analytics & Invoices</h1>
-                <p className="wb-subtitle">Live expense breakdown, category distribution, and recorded SME invoices.</p>
+                <h1 className="wb-title">Spending overview</h1>
+                <p className="wb-subtitle">Understand your business expenses at a glance.</p>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setFile(null)
-                  setErrorMessage(null)
-                  setStatus(null)
-                  setIsUploadModalOpen(true)
-                }}
-                className="wb-button-primary"
-                style={{ width: 'auto' }}
-              >
-                + Upload Invoice
-              </button>
             </div>
 
-            {/* 3. Server-Driven Spending Analytics Component */}
-            <SpendingAnalytics analytics={analytics} loading={loadingAnalytics} />
+            <section className="dashboard-section dashboard-analytics-section" aria-labelledby="analytics-section-title">
+              <div className="dashboard-section-heading">
+                <div>
+                  <h2 id="analytics-section-title">Analytics</h2>
+                  <p>Review patterns, concentration, and changes in your business spending.</p>
+                </div>
+              </div>
+              <SpendingAnalytics analytics={analytics} loading={loadingAnalytics} />
+            </section>
+
+            {/* Data management section */}
+            <section className="dashboard-section dashboard-management-section" aria-labelledby="management-section-title">
+              <div className="dashboard-section-heading">
+                <div>
+                  <h2 id="management-section-title">Manage your data</h2>
+                  <p>Add the source documents and categories that keep your analytics useful.</p>
+                </div>
+              </div>
+              <div className="dashboard-tools-grid">
+                <div className="dashboard-tool">
+                  <div>
+                    <h3>Upload an invoice</h3>
+                    <p>Import a PDF invoice to extract its details and add it to your spending history.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFile(null)
+                      setErrorMessage(null)
+                      setStatus(null)
+                      setIsUploadModalOpen(true)
+                    }}
+                    className="wb-button-primary"
+                  >
+                    Upload invoice
+                  </button>
+                </div>
+                <div className="dashboard-tool">
+                  <div>
+                    <h3>Product categories</h3>
+                    <p>Define categories to keep line items organized and your breakdowns meaningful.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryModalOpen(true)}
+                    className="wb-button-ghost"
+                  >
+                    Manage categories <span className="dashboard-tool-count">{categories.length}</span>
+                  </button>
+                </div>
+              </div>
+            </section>
 
             {/* Invoices List Header */}
-            <div style={{ marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div className="invoices-heading">
+              <h2>
                 Recorded Invoices ({invoices.length})
               </h2>
             </div>

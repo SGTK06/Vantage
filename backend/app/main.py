@@ -23,6 +23,7 @@ from app.data_models import (
 from app.invoice_handler import extract_invoice
 from app.categorizer import categorize_line_items_pipeline, get_text_embedding
 from app.analytics import compute_user_spending_analytics
+from app.analytics_agent import ask_analytics_agent
 
 logger = logging.getLogger(__name__)
 
@@ -203,6 +204,39 @@ def get_spending_analytics(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to compute spending analytics: {str(e)}",
+        )
+
+@app.post("/api/analytics/insights")
+def get_analytics_insight(
+    payload: dict,
+    current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    question = str(payload.get("question") or "").strip()
+    if not question:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please enter a question about your spending.",
+        )
+    if len(question) > 500:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Questions must be 500 characters or fewer.",
+        )
+
+    supabase = get_authenticated_supabase_client(credentials.credentials)
+    try:
+        answer = ask_analytics_agent(
+            question=question,
+            user_id=current_user.id,
+            supabase_client=supabase,
+        )
+        return {"answer": answer}
+    except Exception as e:
+        logger.error(f"Error generating analytics insight: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="The analyst is temporarily unavailable. Please try again.",
         )
 
 # --- Invoice OCR, Categorization & Confirm Endpoints ---
