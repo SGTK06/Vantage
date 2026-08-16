@@ -119,6 +119,10 @@ npm run dev
 
 Open the URL printed by Vite, normally `http://localhost:5173`, in a browser. Create an account or sign in with a Supabase Auth user before uploading invoices.
 
+### Testing
+
+To test the app, use your own invoices or test using the ones given in /invoice-examples folder.
+
 ### Production deployment on Render
 
 The repository includes [`render.yaml`](render.yaml), which defines the FastAPI backend and React static site. In Render, create a new Blueprint from the repository and provide the secret backend environment variables when prompted:
