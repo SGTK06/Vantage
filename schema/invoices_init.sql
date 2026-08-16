@@ -185,6 +185,7 @@ create policy "Users can delete their own line items"
     )
   );
 
+-- Create an invoices bucket for storing invoice PDFs
 -- 11. Storage Bucket RLS Policies for 'invoices' bucket
 create policy "Users can upload their own invoices"
   on storage.objects for insert
