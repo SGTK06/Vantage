@@ -1,4 +1,5 @@
 import { TimelineLineChart, HorizontalBarChart } from './SpendingCharts'
+import AnalystAgent from './AnalystAgent'
 
 const formatMoney = (value) => `$${Number(value || 0).toLocaleString(undefined, {
   minimumFractionDigits: 2,
@@ -78,6 +79,8 @@ export default function SpendingAnalytics({ analytics, loading }) {
           <span className="analytics-supporting">Recorded savings</span>
         </div>
       </div>
+
+      <AnalystAgent />
 
       <div className="analytics-insights">
         <div className="analytics-insight">

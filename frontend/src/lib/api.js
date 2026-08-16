@@ -187,3 +187,21 @@ export async function apiGetSpendingAnalytics(topN = 5) {
 
   return data
 }
+
+export async function apiAskAnalyticsAgent(question) {
+  const res = await fetch(`${API_URL}/api/analytics/insights`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify({ question }),
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'The analyst could not answer right now')
+  }
+
+  return data.answer
+}
