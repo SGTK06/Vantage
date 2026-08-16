@@ -94,6 +94,95 @@ body {
   gap: 2.5rem;
 }
 
+.dashboard-section {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-section + .dashboard-section {
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.dashboard-section-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.dashboard-section-heading h2 {
+  color: var(--text-primary);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.dashboard-section-heading p {
+  max-width: 62ch;
+  margin-top: 0.3rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.dashboard-management-section {
+  padding-bottom: 0.5rem;
+}
+
+.dashboard-tools-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.dashboard-tool {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  min-width: 0;
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-tool h3 {
+  color: var(--text-primary);
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.dashboard-tool p {
+  max-width: 42ch;
+  margin-top: 0.35rem;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.dashboard-tool .wb-button-primary,
+.dashboard-tool .wb-button-ghost {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.dashboard-tool-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  margin-left: 0.35rem;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  background: var(--surface-active);
+  font-size: 0.6875rem;
+  font-family: var(--font-mono);
+}
+
 .dashboard-toolbar {
   display: flex;
   align-items: flex-start;
@@ -323,6 +412,20 @@ body {
 
   .analytics-trend-panel {
     grid-column: auto;
+  }
+
+  .dashboard-tools-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-tool {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .dashboard-tool .wb-button-primary,
+  .dashboard-tool .wb-button-ghost {
+    width: 100%;
   }
 }
 
