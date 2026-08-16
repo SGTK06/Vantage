@@ -138,3 +138,13 @@ The repository includes [`render.yaml`](render.yaml), which defines the FastAPI 
 - `GEMINI_API_KEY`
 
 The Blueprint wires `FRONTEND_URL` and `VITE_API_URL` to the deployed public service URLs. Both services are configured on Render's free plan, so the backend may sleep after inactivity and the first request can take longer while it starts.
+
+## Flowcharts
+
+### Analyst agent architecture
+
+![Analyst agent architecture](flowcharts/analyst_agent_dark.drawio.png)
+
+### PDF parsing pipeline
+
+![PDF parsing pipeline](flowcharts/pdf_parsing_dark.drawio.png)
