@@ -69,3 +69,49 @@ class Invoice(BaseModel):
 # Type aliases for backwards compatibility
 LineItemData = LineItem
 InvoiceExtractData = Invoice
+
+
+# ============================================================================
+# Spending Analytics Schemas
+# ============================================================================
+
+class VendorSpendStat(BaseModel):
+    vendor_name: str
+    total_spend: float
+    invoice_count: int
+    spend_percentage: float
+
+class CategorySpendStat(BaseModel):
+    category_name: str
+    total_spend: float
+    item_count: int
+    spend_percentage: float
+
+class MonthlySpendStat(BaseModel):
+    month: str  # YYYY-MM
+    total_spend: float
+    invoice_count: int
+
+class LargestInvoiceStat(BaseModel):
+    invoice_number: str
+    vendor_name: str
+    amount: float
+    date: Optional[str] = None
+
+class SpendingAnalyticsResponse(BaseModel):
+    total_spend: float
+    invoice_count: int
+    average_invoice_amount: float
+    vendor_count: int
+    active_categories_count: int
+    top_category_name: Optional[str] = None
+    top_category_spend: float = 0.0
+    top_category_share: float = 0.0
+    top_vendor_name: Optional[str] = None
+    top_vendor_spend: float = 0.0
+    total_tax_paid: float = 0.0
+    total_discount_received: float = 0.0
+    top_vendors: List[VendorSpendStat] = []
+    category_breakdown: List[CategorySpendStat] = []
+    monthly_trend: List[MonthlySpendStat] = []
+    largest_invoice: Optional[LargestInvoiceStat] = None

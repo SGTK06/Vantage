@@ -169,3 +169,21 @@ export async function apiCreateCategory(name, description = '') {
 
   return data
 }
+
+export async function apiGetSpendingAnalytics(topN = 5) {
+  const authHeaders = getAuthHeaders()
+
+  const res = await fetch(`${API_URL}/api/analytics/spending?top_n=${topN}`, {
+    method: 'GET',
+    headers: {
+      ...authHeaders,
+    },
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to fetch spending analytics')
+  }
+
+  return data
+}

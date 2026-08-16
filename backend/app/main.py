@@ -5,7 +5,7 @@ import re
 import tempfile
 import time
 from typing import List, Optional
-from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, status
+from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import FRONTEND_URL
@@ -18,9 +18,11 @@ from app.data_models import (
     InvoiceExtractData,
     ProductCategoryCreate,
     ProductCategoryResponse,
+    SpendingAnalyticsResponse,
 )
 from app.invoice_handler import extract_invoice
 from app.categorizer import categorize_line_items_pipeline, get_text_embedding
+from app.analytics import compute_user_spending_analytics
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +183,28 @@ def create_category(
             detail=f"Error saving category: {str(e)}",
         )
 
+# --- Spending Analytics Endpoint ---
+
+@app.get("/api/analytics/spending", response_model=SpendingAnalyticsResponse)
+def get_spending_analytics(
+    top_n: int = Query(5, ge=1, le=50, description="Top N vendors to retrieve"),
+    current_user=Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    supabase = get_authenticated_supabase_client(credentials.credentials)
+    try:
+        return compute_user_spending_analytics(
+            user_id=current_user.id,
+            supabase_client=supabase,
+            top_n_vendors=top_n,
+        )
+    except Exception as e:
+        logger.error(f"Error computing spending analytics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to compute spending analytics: {str(e)}",
+        )
+
 # --- Invoice OCR, Categorization & Confirm Endpoints ---
 
 @app.post("/api/invoices/parse", response_model=InvoiceExtractData)
@@ -222,7 +246,7 @@ async def parse_invoice(
     # Run AI categorization on line items
     raw_extracted_dict = extracted.model_dump()
     line_items_raw = raw_extracted_dict.get("line_items", [])
-
+    
     if line_items_raw:
         supabase = get_authenticated_supabase_client(credentials.credentials)
         try:
@@ -234,7 +258,6 @@ async def parse_invoice(
             raw_extracted_dict["line_items"] = categorized_line_items
         except Exception as e:
             logger.error(f"Categorization error in pipeline: {e}")
-            # Ensure line items at least receive default categorization if an unexpected exception occurs
             for item in line_items_raw:
                 if not item.get("category_name"):
                     item["category_name"] = "General"

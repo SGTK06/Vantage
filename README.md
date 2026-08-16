@@ -11,7 +11,7 @@ PDF Invoices
     | (LlamaParse OCR)
     V
 Parsed Data (Structured Data Models)
-    | (RapidFuzz similarity grouping / embedding based grouping)
+    | (Vector Embedding Based Grouping)
     V
 Expense Categories
     | (Statistics and Summary Dashboard)
