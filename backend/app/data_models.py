@@ -63,7 +63,7 @@ class Invoice(BaseModel):
     tax_amount: Optional[float] = Field(None, description="Total tax amount, if stated separately")
     discount_amount: Optional[float] = Field(None, description="Total discount applied, if any")
     total_amount: float = Field(description="Final total amount due on the invoice")
-    line_items: List[LineItem] = Field(default_factory=list, description="All billed line items / table rows")
+    line_items: Optional[List[LineItem]] = Field(default_factory=list, description="All billed line items / table rows")
 
 
 # Type aliases for backwards compatibility
