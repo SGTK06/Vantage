@@ -7,13 +7,24 @@ from app.config import GEMINI_API_KEY
 logger = logging.getLogger(__name__)
 
 def get_genai_client() -> genai.Client:
+    """Build a Google Generative AI client from the configured API key.
+
+    Raises:
+        RuntimeError: If ``GEMINI_API_KEY`` is not configured.
+    """
     if not GEMINI_API_KEY:
         raise RuntimeError("GEMINI_API_KEY is not configured in environment variables")
     return genai.Client(api_key=GEMINI_API_KEY)
 
 
 def get_text_embedding(text: str) -> list[float]:
-    """Generates embedding vector using Google AI Studio's gemini-embedding-001 model."""
+    """Generate an embedding vector for ``text`` using Gemini Embeddings.
+
+    The Google client has returned both a single ``embedding`` and an
+    ``embeddings`` collection across SDK versions, so both response shapes are
+    accepted here. Provider errors are normalized to ``RuntimeError`` so the
+    categorization pipeline can fall back to its LLM path.
+    """
     client = get_genai_client()
     try:
         response = client.models.embed_content(
@@ -34,9 +45,18 @@ def ask_gemma_to_categorize(
     item_description: str,
     existing_categories: list[str],
 ) -> dict:
-    """Uses Google AI Studio Gemma model to classify the item into an existing category
+    """Classify an item with Gemma or propose a concise new category.
 
-    or propose a concise new product category.
+    The model is asked to return JSON. The response parser tolerates a small
+    amount of surrounding prose, and retries with a second model before
+    returning a deterministic general-expenses fallback.
+
+    Args:
+        item_description: Invoice line-item text to classify.
+        existing_categories: Names that the model may reuse exactly.
+
+    Returns:
+        A mapping containing ``category_name``, ``description``, and ``is_new``.
     """
     client = get_genai_client()
 
@@ -110,13 +130,20 @@ def categorize_line_items_pipeline(
     supabase_client,
     similarity_threshold: float = 0.75,
 ) -> list[dict]:
-    """Full categorization pipeline:
+    """Assign categories to invoice line items.
 
-    1. Embed item with Google gemini-embedding-001.
-    2. Vector search in Supabase product_categories via match_product_categories RPC.
-    3. If not matched, score uncertain, or no categories exist -> query Gemma LLM.
-    4. Store any new categories with embeddings in Supabase.
-    5. Return line items populated with category_id and category_name.
+    Existing categories are tried first through the Supabase vector-search RPC.
+    Items without a qualifying match are sent to Gemma; newly proposed
+    categories are embedded and cached in Supabase for subsequent items.
+
+    Args:
+        line_items: Invoice line items represented as dictionaries.
+        user_id: Owner used to scope category reads, searches, and inserts.
+        supabase_client: Request-scoped Supabase client.
+        similarity_threshold: Minimum vector similarity accepted by the RPC.
+
+    Returns:
+        Copies of the input items with ``category_id`` and ``category_name``.
     """
     # 1. Fetch existing categories from Supabase
     existing_categories = []

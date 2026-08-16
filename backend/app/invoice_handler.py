@@ -11,12 +11,27 @@ EXTRACT_CONFIG = {
 }
 
 def get_llama_client() -> LlamaCloud:
+    """Create a LlamaCloud client from the configured extraction API key."""
     api_key = os.getenv("LLAMA_CLOUD_API_KEY")
     if not api_key:
         raise RuntimeError("LLAMA_CLOUD_API_KEY is not configured in environment variables")
     return LlamaCloud(api_key=api_key)
 
 def extract_invoice(pdf_path: str, timeout_seconds: float = 180, poll_interval: float = 2.0) -> Invoice:
+    """Upload a PDF, poll LlamaExtract, and validate the completed invoice.
+
+    Args:
+        pdf_path: Local path to the invoice PDF.
+        timeout_seconds: Maximum time to wait for extraction completion.
+        poll_interval: Delay between status checks.
+
+    Returns:
+        The extracted and validated :class:`Invoice` model.
+
+    Raises:
+        TimeoutError: If the extraction job does not finish in time.
+        RuntimeError: If extraction fails or returns an invalid result.
+    """
     client = get_llama_client()
     file_obj = client.files.create(file=pdf_path, purpose="extract")
 

@@ -35,6 +35,9 @@ class FakeTable:
         self.payload = payload
         return self
 
+    def select(self, *_):
+        return self
+
     def delete(self):
         return self
 
