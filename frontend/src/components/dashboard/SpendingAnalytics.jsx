@@ -1,9 +1,14 @@
 import { TimelineLineChart, HorizontalBarChart } from './SpendingCharts'
 
+const formatMoney = (value) => `$${Number(value || 0).toLocaleString(undefined, {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})}`
+
 export default function SpendingAnalytics({ analytics, loading }) {
   if (loading && !analytics) {
     return (
-      <div style={{ marginBottom: '2rem', color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+      <div className="analytics-loading" role="status">
         Calculating spending statistics...
       </div>
     )
@@ -18,11 +23,14 @@ export default function SpendingAnalytics({ analytics, loading }) {
     invoice_count,
     average_invoice_amount,
     vendor_count,
+    active_categories_count,
     top_category_name,
     top_category_spend,
     top_category_share,
     top_vendor_name,
     top_vendor_spend,
+    total_tax_paid,
+    total_discount_received,
     top_vendors = [],
     category_breakdown = [],
     monthly_trend = [],
@@ -30,144 +38,115 @@ export default function SpendingAnalytics({ analytics, loading }) {
   } = analytics
 
   return (
-    <div style={{ marginBottom: '2.5rem' }}>
-      {/* 4 Summary KPI Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '1.25rem',
-        marginBottom: '1.75rem',
-      }}>
-        {/* Card 1: Total Spend */}
-        <div className="wb-card" style={{ padding: '1.25rem 1.5rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Total Expenditure
-          </p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.375rem' }}>
-            ${total_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Across {invoice_count} {invoice_count === 1 ? 'invoice' : 'invoices'}
-          </p>
-        </div>
-
-        {/* Card 2: Top Category */}
-        <div className="wb-card" style={{ padding: '1.25rem 1.5rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Top Expense Category
-          </p>
-          <p style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.375rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {top_category_name || 'None'}
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            ${top_category_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({top_category_share}%)
-          </p>
-        </div>
-
-        {/* Card 3: Top Vendor */}
-        <div className="wb-card" style={{ padding: '1.25rem 1.5rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Highest Paid Vendor
-          </p>
-          <p style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.375rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {top_vendor_name || 'None'}
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            ${top_vendor_spend.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-        </div>
-
-        {/* Card 4: Average Invoice */}
-        <div className="wb-card" style={{ padding: '1.25rem 1.5rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Avg Invoice Size
-          </p>
-          <p style={{ fontSize: '1.75rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.375rem' }}>
-            ${average_invoice_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            {vendor_count} distinct {vendor_count === 1 ? 'vendor' : 'vendors'}
-          </p>
+    <section className="analytics-shell" aria-labelledby="analytics-heading">
+      <div className="analytics-section-heading">
+        <div>
+          <h2 id="analytics-heading">At a glance</h2>
+          <p>Your spending picture, based on {invoice_count} recorded {invoice_count === 1 ? 'invoice' : 'invoices'}.</p>
         </div>
       </div>
 
-      {/* Analytics Charts Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-        gap: '1.5rem',
-      }}>
-        {/* Chart 1: Top Vendors by Spend (Standardized 0-100% Bar Chart) */}
-        <div className="wb-card" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-            <div>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Top Vendors by Spend
-              </h3>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
-                Ranked expenditure distribution across suppliers
-              </p>
-            </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Top {top_vendors.length}</span>
-          </div>
+      <div className="analytics-overview">
+        <div className="analytics-total">
+          <span className="analytics-label">Total spend</span>
+          <strong>{formatMoney(total_spend)}</strong>
+          <span className="analytics-supporting">Across all recorded invoices</span>
+        </div>
+        <div className="analytics-stat">
+          <span className="analytics-label">Invoices</span>
+          <strong>{invoice_count}</strong>
+          <span className="analytics-supporting">{vendor_count} {vendor_count === 1 ? 'vendor' : 'vendors'}</span>
+        </div>
+        <div className="analytics-stat">
+          <span className="analytics-label">Average invoice</span>
+          <strong>{formatMoney(average_invoice_amount)}</strong>
+          <span className="analytics-supporting">Per recorded invoice</span>
+        </div>
+        <div className="analytics-stat">
+          <span className="analytics-label">Active categories</span>
+          <strong>{active_categories_count}</strong>
+          <span className="analytics-supporting">With categorized line items</span>
+        </div>
+        <div className="analytics-stat">
+          <span className="analytics-label">Tax paid</span>
+          <strong>{formatMoney(total_tax_paid)}</strong>
+          <span className="analytics-supporting">Included in total spend</span>
+        </div>
+        <div className="analytics-stat">
+          <span className="analytics-label">Discounts received</span>
+          <strong>{formatMoney(total_discount_received)}</strong>
+          <span className="analytics-supporting">Recorded savings</span>
+        </div>
+      </div>
 
+      <div className="analytics-insights">
+        <div className="analytics-insight">
+          <span className="analytics-label">Top category</span>
+          <strong>{top_category_name || 'None yet'}</strong>
+          <span className="analytics-supporting">{formatMoney(top_category_spend)} · {top_category_share}% of categorized spend</span>
+        </div>
+        <div className="analytics-insight">
+          <span className="analytics-label">Top vendor</span>
+          <strong>{top_vendor_name || 'None yet'}</strong>
+          <span className="analytics-supporting">{formatMoney(top_vendor_spend)} total spend</span>
+        </div>
+        <div className="analytics-insight">
+          <span className="analytics-label">Largest invoice</span>
+          <strong>{largest_invoice ? formatMoney(largest_invoice.amount) : 'None yet'}</strong>
+          <span className="analytics-supporting">{largest_invoice ? `${largest_invoice.vendor_name} · ${largest_invoice.invoice_number}` : 'Upload an invoice to see it here'}</span>
+        </div>
+      </div>
+
+      <div className="analytics-chart-grid">
+        <div className="analytics-panel">
+          <div className="analytics-panel-heading">
+            <div>
+              <h3>Where your money goes</h3>
+              <p>Top vendors ranked by total spend.</p>
+            </div>
+            <span>{top_vendors.length} shown</span>
+          </div>
           <HorizontalBarChart
             data={top_vendors}
             labelKey="vendor_name"
             valueKey="total_spend"
             percentageKey="spend_percentage"
             maxScale={total_spend}
-            scaleLabel="% of total spend"
+            scaleLabel="spend"
           />
         </div>
 
-        {/* Chart 2: Category Breakdown (Standardized 0-100% Bar Chart) */}
-        <div className="wb-card" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+        <div className="analytics-panel">
+          <div className="analytics-panel-heading">
             <div>
-              <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Category Spend Distribution
-              </h3>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
-                Product categories classified by AI
-              </p>
+              <h3>What you spend on</h3>
+              <p>Line items grouped by category.</p>
             </div>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{category_breakdown.length} categories</span>
+            <span>{category_breakdown.length} categories</span>
           </div>
-
           <HorizontalBarChart
             data={category_breakdown}
             labelKey="category_name"
             valueKey="total_spend"
             percentageKey="spend_percentage"
             maxScale={total_spend}
-            scaleLabel="% of total spend"
+            scaleLabel="spend"
           />
         </div>
 
-        {/* Chart 3: Monthly Expenses Timeline (Line Graph) */}
         {monthly_trend.length > 0 && (
-          <div className="wb-card" style={{ padding: '1.5rem', gridColumn: '1 / -1' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <div className="analytics-panel analytics-trend-panel">
+            <div className="analytics-panel-heading">
               <div>
-                <h3 style={{ fontSize: '0.9375rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Expenses Timeline Trend
-                </h3>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.125rem' }}>
-                  Chronological monthly expenditure curve
-                </p>
+                <h3>Monthly spending</h3>
+                <p>Track how your expenditure changes over time.</p>
               </div>
-              {largest_invoice && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  Largest Invoice: <strong>${largest_invoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> ({largest_invoice.vendor_name})
-                </span>
-              )}
+              <span>{monthly_trend.length} months</span>
             </div>
-
             <TimelineLineChart data={monthly_trend} />
           </div>
         )}
       </div>
-    </div>
+    </section>
   )
 }

@@ -1,7 +1,14 @@
 import { useState } from 'react'
 
+const formatCompactMoney = (value) => {
+  const amount = Number(value || 0)
+  if (amount >= 1000000) return `$${(amount / 1000000).toFixed(1)}m`
+  if (amount >= 1000) return `$${(amount / 1000).toFixed(1)}k`
+  return `$${Math.round(amount).toLocaleString()}`
+}
+
 /**
- * Clean Minimalist Line Graph Component (SVG-based)
+ * Compact, responsive line graph component (SVG-based).
  * Renders monthly timeline expenses with data points, grid lines, and interactive tooltips.
  */
 export function TimelineLineChart({ data = [] }) {
@@ -16,8 +23,8 @@ export function TimelineLineChart({ data = [] }) {
   }
 
   const width = 600
-  const height = 210
-  const padding = { top: 25, right: 35, bottom: 35, left: 55 }
+  const height = 170
+  const padding = { top: 18, right: 28, bottom: 30, left: 55 }
 
   const chartWidth = width - padding.left - padding.right
   const chartHeight = height - padding.top - padding.bottom
@@ -45,7 +52,7 @@ export function TimelineLineChart({ data = [] }) {
   const yTicks = [0, maxVal * 0.5, maxVal]
 
   return (
-    <div style={{ width: '100%', position: 'relative' }}>
+    <div className="trend-chart" style={{ width: '100%', position: 'relative' }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
         style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}
@@ -187,8 +194,8 @@ export function TimelineLineChart({ data = [] }) {
 }
 
 /**
- * Standardized High-Legibility Horizontal Bar Chart Component
- * Standardizes scale against total budget / max benchmark, with clear baseline axis and prominent labels.
+ * High-legibility horizontal bar chart component.
+ * The bar scale is expressed in currency; percentage remains a secondary share indicator per row.
  */
 export function HorizontalBarChart({
   data = [],
@@ -215,7 +222,7 @@ export function HorizontalBarChart({
 
   return (
     <div>
-      {/* Standardized Scale Axis Header (0% -> 25% -> 50% -> 75% -> 100%) */}
+      {/* Currency scale header */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -226,11 +233,11 @@ export function HorizontalBarChart({
         color: 'var(--text-muted)',
         fontFamily: 'var(--font-mono)',
       }}>
-        <span>0%</span>
-        <span>25%</span>
-        <span>50%</span>
-        <span>75%</span>
-        <span>100% {scaleLabel ? `(${scaleLabel})` : ''}</span>
+        <span>{formatCompactMoney(0)}</span>
+        <span>{formatCompactMoney(ceiling * 0.25)}</span>
+        <span>{formatCompactMoney(ceiling * 0.5)}</span>
+        <span>{formatCompactMoney(ceiling * 0.75)}</span>
+        <span>{formatCompactMoney(ceiling)}{scaleLabel ? ` · ${scaleLabel}` : ''}</span>
       </div>
 
       {/* Bar items */}

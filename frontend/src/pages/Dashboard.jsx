@@ -217,13 +217,7 @@ export default function Dashboard() {
       />
 
       {/* 2. Main Content Area */}
-      <main style={{
-        flex: 1,
-        padding: '2rem',
-        maxWidth: '1200px',
-        width: '100%',
-        margin: '0 auto',
-      }}>
+      <main className="dashboard-main">
         {loadingInvoices ? (
           <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-secondary)' }}>
             <p>Loading invoices and spending metrics...</p>
@@ -244,12 +238,12 @@ export default function Dashboard() {
           />
         ) : (
           /* Formal Dashboard View */
-          <div>
+          <div className="dashboard-content">
             {/* Action Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div className="dashboard-toolbar">
               <div>
-                <h1 className="wb-title">Spending Analytics & Invoices</h1>
-                <p className="wb-subtitle">Live expense breakdown, category distribution, and recorded SME invoices.</p>
+                <h1 className="wb-title">Spending overview</h1>
+                <p className="wb-subtitle">Understand your business expenses at a glance.</p>
               </div>
               <button
                 type="button"
@@ -270,8 +264,8 @@ export default function Dashboard() {
             <SpendingAnalytics analytics={analytics} loading={loadingAnalytics} />
 
             {/* Invoices List Header */}
-            <div style={{ marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            <div className="invoices-heading">
+              <h2>
                 Recorded Invoices ({invoices.length})
               </h2>
             </div>
