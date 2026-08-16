@@ -8,3 +8,4 @@ email-validator
 llama-cloud
 pydantic
 pandas
+google-genai

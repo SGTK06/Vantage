@@ -25,14 +25,26 @@ class TestInvoiceEndpoints(TestCase):
     def tearDown(self):
         app.dependency_overrides.clear()
 
+    def _auth_headers(self):
+        """Return credentials required by the endpoint's HTTP bearer dependency."""
+        return {"Authorization": "Bearer test-token"}
+
     def test_parse_rejects_non_pdf_uploads(self):
         """The parse endpoint should reject files whose extension is not PDF."""
-        response = self.client.post("/api/invoices/parse", files={"file": ("invoice.txt", b"text", "text/plain")})
+        response = self.client.post(
+            "/api/invoices/parse",
+            headers=self._auth_headers(),
+            files={"file": ("invoice.txt", b"text", "text/plain")},
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_parse_rejects_empty_pdf_uploads(self):
         """The parse endpoint should reject an empty PDF before invoking extraction."""
-        response = self.client.post("/api/invoices/parse", files={"file": ("invoice.pdf", b"", "application/pdf")})
+        response = self.client.post(
+            "/api/invoices/parse",
+            headers=self._auth_headers(),
+            files={"file": ("invoice.pdf", b"", "application/pdf")},
+        )
         self.assertEqual(response.status_code, 400)
 
     def test_confirm_rejects_invalid_invoice_payload(self):
@@ -49,7 +61,11 @@ class TestInvoiceEndpoints(TestCase):
         """A valid PDF should return the structured invoice produced by extraction."""
         extracted = Invoice(supplier_name="Acme", invoice_number="INV-1", total_amount=100)
         with mock.patch("app.main.extract_invoice", return_value=extracted):
-            response = self.client.post("/api/invoices/parse", files={"file": ("invoice.pdf", b"pdf", "application/pdf")})
+            response = self.client.post(
+                "/api/invoices/parse",
+                headers=self._auth_headers(),
+                files={"file": ("invoice.pdf", b"pdf", "application/pdf")},
+            )
         self.assertEqual(response.json()["invoice_number"], "INV-1")
 
     def test_list_invoices_filters_by_authenticated_user(self):

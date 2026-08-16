@@ -131,3 +131,41 @@ export async function apiGetInvoices() {
 
   return data.data || []
 }
+
+export async function apiGetCategories() {
+  const authHeaders = getAuthHeaders()
+
+  const res = await fetch(`${API_URL}/api/categories`, {
+    method: 'GET',
+    headers: {
+      ...authHeaders,
+    },
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to retrieve product categories')
+  }
+
+  return data || []
+}
+
+export async function apiCreateCategory(name, description = '') {
+  const authHeaders = getAuthHeaders()
+
+  const res = await fetch(`${API_URL}/api/categories`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders,
+    },
+    body: JSON.stringify({ name, description }),
+  })
+
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data.detail || 'Failed to create product category')
+  }
+
+  return data
+}

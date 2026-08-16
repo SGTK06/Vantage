@@ -8,7 +8,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.data_models import Invoice
-from app.schemas import InvoiceExtractData
+from app.data_models import InvoiceExtractData
 
 
 class TestInvoiceSchemas(TestCase):
